@@ -10,3 +10,6 @@ models/*.pkl
 *.zip
 
 .DS_Store
+
+# Exclude raw data folder
+data/raw/

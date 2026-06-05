@@ -7,5 +7,6 @@ venv/
 .env
 
 models/*.pkl
+*.zip
 
 .DS_Store

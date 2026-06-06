@@ -4,131 +4,141 @@ import numpy as np
 import joblib
 from datetime import datetime
 
-# ==========================================
+import folium
+from streamlit_folium import st_folium
+from geopy.geocoders import Nominatim
 
-# Page Config
 
-# ==========================================
+NYC_LOCATIONS = {
+    "Times Square": (40.7580, -73.9855),
+    "Central Park": (40.7829, -73.9654),
+    "Empire State Building": (40.7484, -73.9857),
+    "Brooklyn Bridge": (40.7061, -73.9969),
+    "JFK Airport": (40.6413, -73.7781),
+    "LaGuardia Airport": (40.7769, -73.8740),
+    "Wall Street": (40.7064, -74.0094),
+    "Grand Central Terminal": (40.7527, -73.9772),
+    "Penn Station": (40.7506, -73.9935),
+    "Madison Square Garden": (40.7505, -73.9934),
+    "Upper East Side": (40.7736, -73.9566),
+    "Upper West Side": (40.7870, -73.9754),
+    "SoHo": (40.7233, -74.0030),
+    "Chinatown": (40.7158, -73.9970),
+    "Battery Park": (40.7033, -74.0170),
+    "Yankee Stadium": (40.8296, -73.9262)
+}
+
+# =====================================================
+
+# PAGE CONFIG
+
+# =====================================================
 
 st.set_page_config(
-page_title="NYC Taxi Intelligence",
-page_icon="🚕",
-layout="wide"
+    page_title="NYC Taxi Intelligence Dashboard",
+    page_icon="🚕",
+    layout="wide"
 )
 
-# ==========================================
+# =====================================================
 
-# Custom CSS
+# LOAD MODEL + PIPELINE
 
-# ==========================================
+# =====================================================
+
+try:
+    model = joblib.load("models/xgboost_model.pkl")
+    feature_pipeline = joblib.load("models/feature_pipeline.pkl")
+except Exception as e:
+    st.error(f"Model loading failed: {e}")
+    st.stop()
+
+# =====================================================
+
+# CUSTOM CSS
+
+# =====================================================
 
 st.markdown(
-""" <style>
-.main {
+    """ <style>
+.stApp {
     background-color: #0F172A;
 }
 
-.hero {
+.hero-title {
     text-align:center;
-    padding:20px;
-    color:white;
-}
-
-.title {
-    font-size:50px;
-    font-weight:bold;
     color:#FFC300;
+    font-size:48px;
+    font-weight:bold;
 }
 
-.subtitle{
-    font-size:22px;
-    color:white;
-    margin-top:10px;
-}
-
-.skyline {
-    font-size:70px;
+.hero-subtitle {
     text-align:center;
+    color:white;
+    font-size:20px;
+    margin-bottom:20px;
 }
 
 .moving-car {
-    animation: moveCar 8s linear infinite;
+    text-align:center;
     font-size:40px;
-    position: relative;
-}
-
-@keyframes moveCar {
-    from { left:-40%; }
-    to { left:100%; }
+    margin-bottom:20px;
 }
 
 </style>
 """,
-unsafe_allow_html=True
+    unsafe_allow_html=True
 )
 
-# ==========================================
+# =====================================================
 
-# Hero Section
+# HERO SECTION
 
-# ==========================================
+# =====================================================
 
 st.markdown(
-""" <div class='hero'> <div class='skyline'>
-🏙️ 🏢 🏙️ </div>
-    <div class='title'>
-    NYC Taxi Duration Intelligence
-    </div>
-
+    """ <div class="hero-title">
+🚕 NYC Taxi Intelligence Dashboard </div>
+<div class="hero-subtitle">
+    Predict Taxi Trip Duration Using Machine Learning
 </div>
 """,
-unsafe_allow_html=True
+    unsafe_allow_html=True
 )
 
 st.markdown(
-""" <div class='moving-car'>
-🚕 🚕 🚕 </div>
+    """ <div class="moving-car">
+🚕 🏙️ 🚕 🏙️ 🚕 </div>
 """,
-unsafe_allow_html=True
+    unsafe_allow_html=True
 )
 
 st.divider()
 
-# ==========================================
+# =====================================================
 
-# User Input Form
+# SIDEBAR
 
-# ==========================================
+# =====================================================
 
-st.subheader("Trip Details")
+with st.sidebar:
+    st.header("🚕 Trip Planner")
 
-col1, col2 = st.columns(2)
+    pickup_location = st.selectbox(
+        "📍 Pickup Location",
+        NYC_LOCATIONS
+)
 
-with col1:
-    pickup_latitude = st.number_input(
-        "Pickup Latitude",
-        value=40.767937
-    )
+    dropoff_location = st.selectbox(
+        "🏁 Dropoff Location",
+        NYC_LOCATIONS
+)
 
-    pickup_longitude = st.number_input(
-        "Pickup Longitude",
-        value=-73.982154
-    )
-
-    passenger_count = st.number_input(
+    passenger_count = st.slider(
         "Passenger Count",
+        min_value=1,
+        max_value=6,
         value=2
-    )
-
-with col2:
-    dropoff_latitude = st.number_input(
-        "Dropoff Latitude",
-        value=40.765602
-    )
-
-    dropoff_longitude = st.number_input(
-        "Dropoff Longitude",
-        value=-73.964630
     )
 
     pickup_datetime = st.datetime_input(
@@ -136,41 +146,146 @@ with col2:
         datetime.now()
     )
 
-predict_btn = st.button(
-    "🚕 Predict Trip Duration"
-)
-
-# Load saved preprocessing pipeline and model
-try:
-    feature_pipeline = joblib.load("models/feature_pipeline.pkl")
-    model = joblib.load("models/xgboost_model.pkl")
-except FileNotFoundError:
-    st.error("Model files not found. Run train.py first to create models/feature_pipeline.pkl and models/xgboost_model.pkl.")
-    feature_pipeline = None
-    model = None
-
-if predict_btn and feature_pipeline is not None and model is not None:
-    input_data = pd.DataFrame(
-        {
-            "vendor_id": [1],
-            "pickup_datetime": [pickup_datetime],
-            "passenger_count": [passenger_count],
-            "pickup_longitude": [pickup_longitude],
-            "pickup_latitude": [pickup_latitude],
-            "dropoff_longitude": [dropoff_longitude],
-            "dropoff_latitude": [dropoff_latitude],
-            "store_and_fwd_flag": ["N"]
-        }
+    predict_btn = st.button(
+        "🚕 Predict Duration"
     )
 
+# =====================================================
+
+# GEOCODING
+
+# =====================================================
+
+geolocator = Nominatim(user_agent="nyc_taxi_dashboard")
+
+pickup = None
+dropoff = None
+
+try:
+    pickup = geolocator.geocode(
+    pickup_location + ", New York",
+    timeout=10
+)
+
+    dropoff = geolocator.geocode(
+        dropoff_location + ", New York",
+        timeout=10
+)
+except Exception as e:
+    st.error(f"Geocoding Error: {e}")
+
+# Temporarily add:
+
+st.write("Pickup Input:", pickup_location)
+st.write("Dropoff Input:", dropoff_location)
+
+st.write("Pickup Result:", pickup)
+st.write("Dropoff Result:", dropoff)
+
+# =====================================================
+
+# MAP
+
+# =====================================================
+
+if pickup and dropoff:
+    st.subheader("🗺️ Route Visualization")
+
+    m = folium.Map(
+        location=[pickup.latitude, pickup.longitude],
+        zoom_start=11
+    )
+
+    folium.Marker(
+        [pickup.latitude, pickup.longitude],
+        popup="Pickup"
+    ).add_to(m)
+
+    folium.Marker(
+        [dropoff.latitude, dropoff.longitude],
+        popup="Dropoff"
+    ).add_to(m)
+
+    folium.PolyLine(
+        [
+            [pickup.latitude, pickup.longitude],
+            [dropoff.latitude, dropoff.longitude]
+        ],
+        color="yellow",
+        weight=6
+    ).add_to(m)
+
+    st_folium(
+        m,
+        width=1200,
+        height=500
+    )
+else:
+    st.warning(
+        "Unable to locate one of the addresses."
+    )
+
+# =====================================================
+
+# PREDICTION
+
+# =====================================================
+
+if predict_btn and pickup and dropoff:
     try:
-        processed = feature_pipeline.transform(input_data)
-        prediction_log = model.predict(processed)
+        input_data = pd.DataFrame(
+            {
+                "vendor_id": [1],
+                "pickup_datetime": [pickup_datetime],
+                "passenger_count": [passenger_count],
+                "pickup_longitude": [pickup.longitude],
+                "pickup_latitude": [pickup.latitude],
+                "dropoff_longitude": [dropoff.longitude],
+                "dropoff_latitude": [dropoff.latitude],
+                "store_and_fwd_flag": ["N"]
+            }
+        )
+
+        processed_data = feature_pipeline.transform(input_data)
+        prediction_log = model.predict(processed_data)
         prediction_seconds = np.expm1(prediction_log)[0]
-        prediction_minutes = prediction_seconds / 60.0
+        prediction_minutes = prediction_seconds / 60
+
+        st.divider()
+        st.subheader("📊 Trip Insights")
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.metric(
+                "⏰ Duration",
+                f"{prediction_minutes:.1f} min"
+            )
+
+        with col2:
+            distance = np.sqrt(
+                (pickup.latitude - dropoff.latitude) ** 2
+                + (pickup.longitude - dropoff.longitude) ** 2
+            )
+            st.metric(
+                "📍 Distance",
+                f"{distance:.3f}"
+            )
+
+        with col3:
+            rush_hour = (
+                7 <= pickup_datetime.hour <= 10
+                or 16 <= pickup_datetime.hour <= 19
+            )
+            st.metric(
+                "🚦 Traffic",
+                "High" if rush_hour else "Normal"
+            )
 
         st.success(
-            f"Predicted Trip Duration: {prediction_seconds:.2f} seconds ({prediction_minutes:.1f} minutes)"
+            f"Estimated Trip Duration: {prediction_seconds:.2f} seconds"
         )
     except Exception as e:
-        st.error(f"Prediction failed: {e}")
+        st.error(
+            f"Prediction failed: {e}"
+        )

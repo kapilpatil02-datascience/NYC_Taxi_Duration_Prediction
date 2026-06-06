@@ -7,6 +7,8 @@ from datetime import datetime
 import folium
 from streamlit_folium import st_folium
 from geopy.geocoders import Nominatim
+from geopy.distance import geodesic
+
 
 
 NYC_LOCATIONS = {
@@ -28,10 +30,9 @@ NYC_LOCATIONS = {
     "Yankee Stadium": (40.8296, -73.9262)
 }
 
+
 # =====================================================
-
 # PAGE CONFIG
-
 # =====================================================
 
 st.set_page_config(
@@ -41,9 +42,7 @@ st.set_page_config(
 )
 
 # =====================================================
-
 # LOAD MODEL + PIPELINE
-
 # =====================================================
 
 try:
@@ -66,23 +65,43 @@ st.markdown(
 }
 
 .hero-title {
+    font-family:'Google Sans', sans-serif !important;
     text-align:center;
-    color:#FFC300;
+    color:#FFFFFF;
     font-size:48px;
     font-weight:bold;
 }
 
 .hero-subtitle {
+    font-family: 'Google Sans', sans-serif;
     text-align:center;
-    color:white;
+    color:yellow;
     font-size:20px;
     margin-bottom:20px;
 }
 
 .moving-car {
-    text-align:center;
-    font-size:40px;
-    margin-bottom:20px;
+
+    position: relative;
+
+    font-size: 40px;
+
+    animation: taxiMove 5s linear infinite;
+
+    white-space: nowrap;
+
+    width: fit-content;
+}
+
+@keyframes taxiMove {
+
+    100% {
+        left: -30%;
+    }
+
+    0% {
+        left: 100%;
+    }
 }
 
 </style>
@@ -91,14 +110,12 @@ st.markdown(
 )
 
 # =====================================================
-
 # HERO SECTION
-
 # =====================================================
 
 st.markdown(
     """ <div class="hero-title">
-🚕 NYC Taxi Intelligence Dashboard </div>
+NYC Taxi Intelligence Dashboard </div>
 <div class="hero-subtitle">
     Predict Taxi Trip Duration Using Machine Learning
 </div>
@@ -107,18 +124,18 @@ st.markdown(
 )
 
 st.markdown(
-    """ <div class="moving-car">
-🚕 🏙️ 🚕 🏙️ 🚕 </div>
-""",
+    """
+    <div class="moving-car">
+        🚕  🚕  🚕 'Madamji Otp??'
+    </div>
+    """,
     unsafe_allow_html=True
 )
 
 st.divider()
 
 # =====================================================
-
 # SIDEBAR
-
 # =====================================================
 
 with st.sidebar:
@@ -150,27 +167,36 @@ with st.sidebar:
         "🚕 Predict Duration"
     )
 
-# =====================================================
 
+# =====================================================
 # GEOCODING
-
 # =====================================================
 
-geolocator = Nominatim(user_agent="nyc_taxi_dashboard")
+@st.cache_data
+def get_location(place):
+
+    geolocator = Nominatim(
+        user_agent="nyc_taxi_project"
+    )
+
+    return geolocator.geocode(
+        place + ", New York"
+    )
+
+geolocator = Nominatim(user_agent="nyc_taxi_project_v1")
 
 pickup = None
 dropoff = None
 
 try:
-    pickup = geolocator.geocode(
-    pickup_location + ", New York",
-    timeout=10
+    pickup = get_location(
+    pickup_location
 )
 
-    dropoff = geolocator.geocode(
-        dropoff_location + ", New York",
-        timeout=10
+    dropoff = get_location(
+    dropoff_location
 )
+    
 except Exception as e:
     st.error(f"Geocoding Error: {e}")
 
@@ -179,17 +205,14 @@ except Exception as e:
 st.write("Pickup Input:", pickup_location)
 st.write("Dropoff Input:", dropoff_location)
 
-st.write("Pickup Result:", pickup)
-st.write("Dropoff Result:", dropoff)
+
 
 # =====================================================
-
 # MAP
-
 # =====================================================
 
 if pickup and dropoff:
-    st.subheader("🗺️ Route Visualization")
+    st.subheader("🗺️ Map")
 
     m = folium.Map(
         location=[pickup.latitude, pickup.longitude],
@@ -217,7 +240,7 @@ if pickup and dropoff:
 
     st_folium(
         m,
-        width=1200,
+        width=None,
         height=500
     )
 else:
@@ -226,9 +249,7 @@ else:
     )
 
 # =====================================================
-
 # PREDICTION
-
 # =====================================================
 
 if predict_btn and pickup and dropoff:
@@ -263,13 +284,21 @@ if predict_btn and pickup and dropoff:
             )
 
         with col2:
-            distance = np.sqrt(
-                (pickup.latitude - dropoff.latitude) ** 2
-                + (pickup.longitude - dropoff.longitude) ** 2
-            )
+
+            distance_km = geodesic(
+                (
+                    pickup.latitude,
+                    pickup.longitude
+                ),
+                (
+                    dropoff.latitude,
+                    dropoff.longitude
+                )
+            ).km
+
             st.metric(
                 "📍 Distance",
-                f"{distance:.3f}"
+                f"{distance_km:.2f} km"
             )
 
         with col3:
